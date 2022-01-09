@@ -10,6 +10,8 @@
 //     "outputfile":"/some/dir/output.json" 
 // }
 
+/// V1.2.0 增加对整形数据和取值范围的判断 2022-1-9
+
 
 #include "RiskValidateTool.h"
 #include <string>
@@ -46,7 +48,7 @@ int main(int argc , char* argv[])
 {
     string programDescriptionAndVersion ;
     programDescriptionAndVersion += "A program to validate risk product for CMA. 2022-1-7 wangfengdev@163.com\n" ;
-    programDescriptionAndVersion += "V1.1.1 2022-1-8\n" ;
+    programDescriptionAndVersion += "V1.2.0 2022-1-9\n" ;
     programDescriptionAndVersion += "usage:risk_dataproduct_validate input.tif output.json\n" ;
     programDescriptionAndVersion += "risk_standard_grid_code_V200.tif should be in the same dir of the program. A daily log files in ./logs/date_{yyyy-MM-dd}.log\n" ;
     cout << programDescriptionAndVersion << endl;
@@ -83,6 +85,12 @@ int main(int argc , char* argv[])
         return 12 ;
     }
 
+    //0.检查数据类型与取值范围
+    string error01 ;
+    bool ok01 = RiskValidateTool::isGeoTiff_Integer(inputFilename,error01) ;
+    spdlog::info("输入数据是否是整形以及无异常值:{} , 错误信息:{}" , ok01 ,error01 ) ;
+
+
     //1.检查坐标系是否CGCS2000
     string error1 ;
     bool ok1 = RiskValidateTool::isGeoTiff_CGCS2000(inputFilename,error1) ;
@@ -108,6 +116,9 @@ int main(int argc , char* argv[])
 
     }else{
         string outmsg ;
+         if( ok01==false ){
+            outmsg += "输入数据不是整形或者存在无异常值，详细信息：" + error01 + ";";
+        }
         if( ok1==false ){
             outmsg += "输入数据不是CGCS2000坐标，详细信息：" + error1 + ";";
         }

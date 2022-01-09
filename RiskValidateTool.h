@@ -29,6 +29,10 @@ public:
 	static bool isGeoTiff_ExtentOk(string standardfilename, string rasterfilename, string& error);
 	static bool isShp_ExtentOk(string shpfilename, string& error);
 
+	//2022-1-9 对整形值的检查，是否是byte,uint16,int16,uint32,int32 危险性0-4 检查 风险0-5检查
+	static bool isGeoTiff_Integer(string rasterfilename,string& error) ;
+
+
 
 	//获取行政编码在标准网格中的范围，行政编码不足9位的，在后面补齐，比如110001，进行查找的时候使用110001000~110001999 2022-1-7
 	//行政区划编码不能是0开头的

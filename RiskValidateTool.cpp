@@ -18,8 +18,12 @@
 /// V1.0.2
 /// (1)使用精度检验考虑9位小数
 
+/// V1.1.0
+/// (1)增加栅格数据类型判断，要求是byte，uint16，int16，uint32，int32 这几种类型，危险性等级取值范围0-4，风险等级取值只能0-5
+/// (2)缺少的标准网格的rows和cols录入在错误信息中
 
-string RiskValidateTool::version = "v1.0.2";
+
+string RiskValidateTool::version = "v1.1.0";
 double RiskValidateTool::eps = 0.000000001;
 
 bool RiskValidateTool::isGeoTiff_CGCS2000(string rasterfile, string& error)
@@ -356,7 +360,7 @@ bool RiskValidateTool::checkEveryGridMatching(string standardfilename, int code,
 	}
 
 	if (unmatchCount > 0) {
-		error = string("输入栅格数据不在标准网格中(") + wStringUtils::int2str(unmatchingPoints.size())+ "),前三个点:";
+		error = string("输入栅格数据不在标准网格中格点的数量：") + wStringUtils::int2str(unmatchingPoints.size())+ ",前三个不在标准网格中输入数据格点坐标:";
 		for (int iun = 0; iun < unmatchingPoints.size(); ++iun) {
 			error += "(" + wStringUtils::int2str(unmatchingPoints[iun].x) + "," + wStringUtils::int2str(unmatchingPoints[iun].y) + ") ";
 		}
@@ -399,6 +403,76 @@ bool RiskValidateTool::computeXzCode(int code, int& codelow, int& codehigh)
 			codelow = codelow * 10;
 			codehigh = codehigh * 10 + 9;
 		}
+	}
+	return true;
+}
+
+
+//2022-1-9 对整形值的检查，是否是byte,uint16,int16,uint32,int32 危险性0-4 检查 风险0-5检查
+bool RiskValidateTool::isGeoTiff_Integer(string rasterfilename,string& error) 
+{
+	string fileName = wStringUtils::getFileNameFromFilePath(rasterfilename);
+	vector<string> strArr = wStringUtils::splitString(fileName, "_");
+	if (strArr.size() < 5) {
+		error = string("输入文件文件名不规范:") + fileName + ", 文件名规范为:灾害类别代码_成果类型_数据对象细化代码_6位行政区划编码_序号(01-99).xxx";
+		return false;
+	}
+
+	bool pcodeOk = wStringUtils::isAllNumber( strArr[2] ) ;
+	if( pcodeOk ==false ){
+		error = string("输入文件文件名中数据对象细化代码无效:") +strArr[2];
+		return false;
+	}
+
+	// 代码01 表示危险性区划 0-4 ， 其他应该都是风险相关 0-5
+	int productCode = atof( strArr[2].c_str() ) ;
+	int validMin = 0 ;
+	int validMax = 4 ;
+	if( productCode == 1 ){
+		validMax = 4 ;
+	}else {
+		validMax = 5 ;
+	}
+
+	std::shared_ptr<wGdalRaster> rasterPtr(wGdalRasterFactory::OpenFile(rasterfilename));
+	if (rasterPtr.get() == 0) {
+		error = "打开输入栅格数据文件失败";
+		return false;
+	}
+
+	GDALDataType dataType = rasterPtr->getDataType();
+	if( dataType != GDT_Byte && dataType!= GDT_UInt16 && dataType != GDT_Int16 && dataType != GDT_UInt32 && dataType!= GDT_Int32 )
+	{
+		error = string("输入栅格数据的数据类型不是整形，请转换为如下类型Byte(推荐),UInt16,Int16,UInt32,Int32重新检验") ;
+		return false ;
+	}
+
+	int outOfRangePixelCount = 0 ;
+	int xsize = rasterPtr->getXSize() ;
+	int ysize = rasterPtr->getYSize() ;
+	for(int iy = 0; iy < ysize; ++ iy )
+	{
+		for(int ix = 0 ; ix < xsize; ++ ix )
+		{
+			int pxval = rasterPtr->getValuei(ix,iy,0) ;
+			if( pxval < validMin || pxval > validMax )
+			{
+				++outOfRangePixelCount;
+			}
+
+		}
+	}
+
+	if( outOfRangePixelCount>0 ){
+		if( productCode==1 ){
+			//危险性分级0-4
+			error = string("危险性区划（分级）数据取值范围0~4,输入数据超出范围个数:") + wStringUtils::int2str(outOfRangePixelCount) ;
+		}
+		else{
+			//风险分级0-5
+			error = string("风险区划（分级）数据取值范围0~5,输入数据超出范围个数:") + wStringUtils::int2str(outOfRangePixelCount) ;
+		}
+		return false ;
 	}
 	return true;
 }
