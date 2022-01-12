@@ -26,8 +26,10 @@
 /// V1.1.1 2022-1-9
 /// (1)修复isGeoTiff_GridSizeOK中trans在Raster释放后仍然参与计算的bug，使用transVal进行计算.
 
+/// V1.2.0 2022-1-12
+/// (1)修改产品错误说明，精简这些说明内容
 
-string RiskValidateTool::version = "v1.1.1";
+string RiskValidateTool::version = "v1.2.0";
 double RiskValidateTool::eps = 0.000000001;
 
 bool RiskValidateTool::isGeoTiff_CGCS2000(string rasterfile, string& error)
@@ -48,7 +50,8 @@ bool RiskValidateTool::isGeoTiff_CGCS2000(string rasterfile, string& error)
 	const string cgcs2000wktTail = ",AUTHORITY[\"EPSG\",\"4490\"]]";
 
 	if (inputWkt.length() < cgcs2000wktHead.length() + cgcs2000wktTail.length()) {
-		error = string("输入文件不是标准CGCS2000坐标系(1),输入数据wkt为:") + inputWkt;
+		//error = string("输入文件不是CGCS2000坐标系(1),输入数据wkt为:") + inputWkt;
+		error = string("输入文件不是CGCS2000坐标系");
 		return false;
 	}
 
@@ -57,7 +60,8 @@ bool RiskValidateTool::isGeoTiff_CGCS2000(string rasterfile, string& error)
 
 	if (cgcs2000wktHead.compare(inputWktHead) != 0 || cgcs2000wktTail.compare(inputWktTail) != 0 )
 	{
-		error = string("输入文件不是标准CGCS2000坐标系(2),输入数据wkt为:") + inputWkt;
+		//error = string("输入文件不是标准CGCS2000坐标系(2),输入数据wkt为:") + inputWkt;
+		error = string("输入文件不是CGCS2000坐标系");
 		return false;
 	}
 
@@ -100,7 +104,8 @@ bool RiskValidateTool::isGeoTiff_GridSizeOK(string rasterfile, string& error)
 		char buffer2[64];
 		sprintf(buffer1, "(%15.10f)", thirtySeconds);
 		sprintf(buffer2, "(%15.10f,%15.10f)", transVal[1],transVal[5]);
-		error = string("输入栅格数据分辨率不符合30秒") + buffer1 + ",输入数据分辨率:" + buffer2;
+		//error = string("输入栅格数据分辨率不符合30秒") + buffer1 + ",输入数据分辨率:" + buffer2;
+		error = string("输入文件格网分辨率不是30''");
 		return false;
 	}
 
@@ -147,8 +152,9 @@ bool RiskValidateTool::isGeoTiff_ExtentOk(string standardfilename,string rasterf
 	}
 
 	if (standcnt != incnt) {
-		error = string("输入数据网格数量(")+ wStringUtils::int2str(incnt) + ")与行政区标准网格数量(" 
-			+ wStringUtils::int2str(standcnt) +")不匹配" ;
+		//error = string("输入数据网格数量(")+ wStringUtils::int2str(incnt) + ")与行政区标准网格数量(" 
+		//	+ wStringUtils::int2str(standcnt) +")不匹配" ;
+		error = string("输入文件与标准格网不完全重合");
 		return false;
 	}
 
@@ -159,14 +165,16 @@ bool RiskValidateTool::isGeoTiff_ExtentOk(string standardfilename,string rasterf
 		char buffer2[128];
 		sprintf(buffer1, "%15.10f,%15.10f,%15.10f,%15.10f", inleft, inright, intop, inbottom);
 		sprintf(buffer2, "%15.10f,%15.10f,%15.10f,%15.10f", standleft, standright, standtop, standbottom);
-		error = string("输入数据空间范围(") + string(buffer1) + ")与行政区标准网格空间范围("
-			+ string(buffer2) + ")不匹配";
+		//error = string("输入数据空间范围(") + string(buffer1) + ")与行政区标准网格空间范围("
+		//	+ string(buffer2) + ")不匹配";
+		error = string("输入文件与标准格网不完全重合");
 		return false;
 	}
 
 	vector<RiskValidateToolPointI> unMatchPoints;
 	bool matchOk = checkEveryGridMatching(standardfilename, xycodei, rasterfilename, 0, unMatchPoints, error);
 	if (matchOk == false) {
+		error = string("输入文件与标准格网不完全重合");
 		return false;
 	}
 
@@ -200,7 +208,7 @@ bool RiskValidateTool::computeExtentByCode(string standardGridFilename, int code
 	}
 
 	//for debug
-	cout << "debug code,low,high:" << code << "," << codeLow << "," << codeHigh << endl;
+	//cout << "debug code,low,high:" << code << "," << codeLow << "," << codeHigh << endl;
 
 	retGridCout = 0;
 	retleft = 999999.0;
@@ -447,7 +455,8 @@ bool RiskValidateTool::isGeoTiff_Integer(string rasterfilename,string& error)
 	GDALDataType dataType = rasterPtr->getDataType();
 	if( dataType != GDT_Byte && dataType!= GDT_UInt16 && dataType != GDT_Int16 && dataType != GDT_UInt32 && dataType!= GDT_Int32 )
 	{
-		error = string("输入栅格数据的数据类型不是整形，请转换为如下类型Byte(推荐),UInt16,Int16,UInt32,Int32重新检验") ;
+		//error = string("输入栅格数据的数据类型不是整形，请转换为如下类型Byte(推荐),UInt16,Int16,UInt32,Int32重新检验") ;
+		error = string("输入栅格数据的数据类型不是整形");
 		return false ;
 	}
 
@@ -470,11 +479,13 @@ bool RiskValidateTool::isGeoTiff_Integer(string rasterfilename,string& error)
 	if( outOfRangePixelCount>0 ){
 		if( productCode==1 ){
 			//危险性分级0-4
-			error = string("危险性区划（分级）数据取值范围0~4,输入数据超出范围个数:") + wStringUtils::int2str(outOfRangePixelCount) ;
+			//error = string("危险性区划（分级）数据取值范围0~4,输入数据超出范围个数:") + wStringUtils::int2str(outOfRangePixelCount) ;
+			error = string("输入数据属性值不符合规范（1-4）");
 		}
 		else{
 			//风险分级0-5
-			error = string("风险区划（分级）数据取值范围0~5,输入数据超出范围个数:") + wStringUtils::int2str(outOfRangePixelCount) ;
+			//error = string("风险区划（分级）数据取值范围0~5,输入数据超出范围个数:") + wStringUtils::int2str(outOfRangePixelCount) ;
+			error = string("输入数据属性值不符合规范（1-5）");
 		}
 		return false ;
 	}

@@ -12,6 +12,8 @@
 
 /// V1.2.0 增加对整形数据和取值范围的判断 2022-1-9
 
+/// V1.3.0 修改产品错误提示说明
+
 
 #include "RiskValidateTool.h"
 #include <string>
@@ -49,6 +51,7 @@ int main(int argc , char* argv[])
     string programDescriptionAndVersion ;
     programDescriptionAndVersion += "A program to validate risk product for CMA. 2022-1-7 wangfengdev@163.com\n" ;
     programDescriptionAndVersion += "V1.2.0 2022-1-9\n" ;
+    programDescriptionAndVersion += "V1.3.0 2022-1-12 modify product error description.\n" ;
     programDescriptionAndVersion += "usage:risk_dataproduct_validate input.tif output.json\n" ;
     programDescriptionAndVersion += "risk_standard_grid_code_V200.tif should be in the same dir of the program. A daily log files in ./logs/date_{yyyy-MM-dd}.log\n" ;
     cout << programDescriptionAndVersion << endl;
@@ -117,19 +120,23 @@ int main(int argc , char* argv[])
     }else{
         string outmsg ;
          if( ok01==false ){
-            outmsg += "输入数据不是整形或者存在无异常值，详细信息：" + error01 + ";";
+            //outmsg += "输入数据不是整形或者存在无异常值，详细信息：" + error01 + ";";
+            outmsg+=error01+";" ;
         }
         if( ok1==false ){
-            outmsg += "输入数据不是CGCS2000坐标，详细信息：" + error1 + ";";
+            //outmsg += "输入数据不是CGCS2000坐标，详细信息：" + error1 + ";";
+            outmsg+=error1+";" ;
         }
         if( ok2==false ){
-            outmsg += "输入数据分辨率不是30秒，详细信息：" + error2 + ";";
+            //outmsg += "输入数据分辨率不是30秒，详细信息：" + error2 + ";";
+            outmsg+=error2+";" ;
         }
         if( ok3==false ){
-            outmsg += "输入数据对应行政区划与标准网格不匹配，详细信息：" + error3 + ";";
+            //outmsg += "输入数据对应行政区划与标准网格不匹配，详细信息：" + error3 + ";";
+            outmsg+=error3+";" ;
         }
         outputJsonOk = writeOutputJson(outputJsonFilename,"9",outmsg);
-        spdlog::info("{} 输入数据没有通过检验，{}",inputFilename, outmsg);
+        spdlog::info("{} 输入数据没有通过检验，错误信息:{}",inputFilename, outmsg);
         cout<<"输入数据没有通过检验"<<endl ;
     }
 
