@@ -1,3 +1,4 @@
+﻿#pragma execution_character_set("utf-8")
 #pragma once
 /// <summary>
 /// 产品成果检查工具类，检查逻辑都在这个类里面

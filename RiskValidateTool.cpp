@@ -1,3 +1,4 @@
+﻿#pragma execution_character_set("utf-8")
 #include "RiskValidateTool.h"
 
 #define WGDALRASTER_H_IMPLEMENTATION
@@ -22,8 +23,11 @@
 /// (1)增加栅格数据类型判断，要求是byte，uint16，int16，uint32，int32 这几种类型，危险性等级取值范围0-4，风险等级取值只能0-5
 /// (2)缺少的标准网格的rows和cols录入在错误信息中
 
+/// V1.1.1 2022-1-9
+/// (1)修复isGeoTiff_GridSizeOK中trans在Raster释放后仍然参与计算的bug，使用transVal进行计算.
 
-string RiskValidateTool::version = "v1.1.0";
+
+string RiskValidateTool::version = "v1.1.1";
 double RiskValidateTool::eps = 0.000000001;
 
 bool RiskValidateTool::isGeoTiff_CGCS2000(string rasterfile, string& error)
@@ -85,7 +89,7 @@ bool RiskValidateTool::isGeoTiff_GridSizeOK(string rasterfile, string& error)
 	bool goodReso = false;
 	if (fabs(transVal[2]) < eps && fabs(transVal[4]) < eps)
 	{
-		if (fabs(thirtySeconds - transVal[1]) < eps && fabs(thirtySeconds + trans[5]) < eps)
+        if (fabs(thirtySeconds - transVal[1]) < eps && fabs(thirtySeconds + transVal[5]) < eps) //bugfixed 2022-1-9
 		{
 			goodReso = true;
 		}
