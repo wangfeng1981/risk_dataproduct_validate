@@ -29,42 +29,48 @@
 /// V1.2.0 2022-1-12
 /// (1)修改产品错误说明，精简这些说明内容
 
-string RiskValidateTool::version = "v1.2.0";
+/// V1.2.1 2022-1-20
+/// (1) NoData 可以不是0
+/// (2) 不对CGCS2000进行检验
+
+string RiskValidateTool::version = "v1.2.1";
 double RiskValidateTool::eps = 0.000000001;
 
 bool RiskValidateTool::isGeoTiff_CGCS2000(string rasterfile, string& error)
 {
-	wGdalRaster* raster = wGdalRasterFactory::OpenFile(rasterfile);
-	if (raster == 0) {
-		error = "打开文件失败,请检查文件是否是有效的GeoTiff";
-		return false;
+	if( false ){
+		//根据用户要求不再对CGCS2000进行判断 2022-1-20
+		wGdalRaster* raster = wGdalRasterFactory::OpenFile(rasterfile);
+		if (raster == 0) {
+			error = "打开文件失败,请检查文件是否是有效的GeoTiff";
+			return false;
+		}
+
+		string inputWkt = string(raster->getProj()) ;
+		inputWkt = wStringUtils::toUpper(inputWkt);
+
+		delete raster;
+
+		
+		const string cgcs2000wktHead = "GEOGCS[";
+		const string cgcs2000wktTail = ",AUTHORITY[\"EPSG\",\"4490\"]]";
+
+		if (inputWkt.length() < cgcs2000wktHead.length() + cgcs2000wktTail.length()) {
+			//error = string("输入文件不是CGCS2000坐标系(1),输入数据wkt为:") + inputWkt;
+			error = string("输入文件不是CGCS2000坐标系");
+			return false;
+		}
+
+		string inputWktHead = inputWkt.substr(0, cgcs2000wktHead.length());
+		string inputWktTail = inputWkt.substr(inputWkt.length() - cgcs2000wktTail.length());
+
+		if (cgcs2000wktHead.compare(inputWktHead) != 0 || cgcs2000wktTail.compare(inputWktTail) != 0 )
+		{
+			//error = string("输入文件不是标准CGCS2000坐标系(2),输入数据wkt为:") + inputWkt;
+			error = string("输入文件不是CGCS2000坐标系");
+			return false;
+		}
 	}
-
-	string inputWkt = string(raster->getProj()) ;
-	inputWkt = wStringUtils::toUpper(inputWkt);
-
-	delete raster;
-
-	
-	const string cgcs2000wktHead = "GEOGCS[";
-	const string cgcs2000wktTail = ",AUTHORITY[\"EPSG\",\"4490\"]]";
-
-	if (inputWkt.length() < cgcs2000wktHead.length() + cgcs2000wktTail.length()) {
-		//error = string("输入文件不是CGCS2000坐标系(1),输入数据wkt为:") + inputWkt;
-		error = string("输入文件不是CGCS2000坐标系");
-		return false;
-	}
-
-	string inputWktHead = inputWkt.substr(0, cgcs2000wktHead.length());
-	string inputWktTail = inputWkt.substr(inputWkt.length() - cgcs2000wktTail.length());
-
-	if (cgcs2000wktHead.compare(inputWktHead) != 0 || cgcs2000wktTail.compare(inputWktTail) != 0 )
-	{
-		//error = string("输入文件不是标准CGCS2000坐标系(2),输入数据wkt为:") + inputWkt;
-		error = string("输入文件不是CGCS2000坐标系");
-		return false;
-	}
-
 	return true;
 }
 
@@ -438,20 +444,21 @@ bool RiskValidateTool::isGeoTiff_Integer(string rasterfilename,string& error)
 
 	// 代码01 表示危险性区划 0-4 ， 其他应该都是风险相关 0-5
 	int productCode = atof( strArr[2].c_str() ) ;
-	int validMin = 0 ;
+	int validMin = 1 ;//2022-1-20 无效值单独考虑，不放在这里
 	int validMax = 4 ;
 	if( productCode == 1 ){
 		validMax = 4 ;
 	}else {
 		validMax = 5 ;
 	}
+	
 
 	std::shared_ptr<wGdalRaster> rasterPtr(wGdalRasterFactory::OpenFile(rasterfilename));
 	if (rasterPtr.get() == 0) {
 		error = "打开输入栅格数据文件失败";
 		return false;
 	}
-
+	int noDataVal = rasterPtr->getNoDataValue() ;//2022-1-20
 	GDALDataType dataType = rasterPtr->getDataType();
 	if( dataType != GDT_Byte && dataType!= GDT_UInt16 && dataType != GDT_Int16 && dataType != GDT_UInt32 && dataType!= GDT_Int32 )
 	{
@@ -460,6 +467,7 @@ bool RiskValidateTool::isGeoTiff_Integer(string rasterfilename,string& error)
 		return false ;
 	}
 
+	
 	int outOfRangePixelCount = 0 ;
 	int xsize = rasterPtr->getXSize() ;
 	int ysize = rasterPtr->getYSize() ;
@@ -468,6 +476,7 @@ bool RiskValidateTool::isGeoTiff_Integer(string rasterfilename,string& error)
 		for(int ix = 0 ; ix < xsize; ++ ix )
 		{
 			int pxval = rasterPtr->getValuei(ix,iy,0) ;
+			if( pxval == noDataVal ) continue ;//2022-1-20
 			if( pxval < validMin || pxval > validMax )
 			{
 				++outOfRangePixelCount;

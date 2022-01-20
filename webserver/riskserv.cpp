@@ -24,12 +24,14 @@ using namespace std;
 
 int main(int argc , char * argv[]){
 	string version = "v1.0.0 2022-1-14" ;
+	version += "\nv1.1.0 2022-1-20" ;
 
 	cout<<"A program to server risk product validate. by wf 2022-1-14."<<endl ;
 	cout<<version<<endl ;
 	cout<<"usage:riskserv port /some/dir/logfilename"<<endl ;
 
 	cout<<"检验算法版本："<<RiskValidateTool::getVersion() <<endl ;
+	cout<<"当前检验算法不对CGCS2000进行判断！！ 2022-1-20"<<endl ;
 	GDALAllRegister();
 	if( argc!=3 ){
 		cout<<"argc not 3."<<endl ;
@@ -43,7 +45,7 @@ int main(int argc , char * argv[]){
     spdlog::set_default_logger(dailylogger );
     spdlog::info("****************************");
     spdlog::info("riskserv version:{}",version);
-    spdlog::info("检验算法版本：{}", RiskValidateTool::getVersion() );
+    spdlog::info("检验算法版本：{} ， 当前检验算法不对CGCS2000进行判断！！ 2022-1-20 ", RiskValidateTool::getVersion() );
     spdlog::info("port:{}" , port);
 
     string exefilename = argv[0] ;
