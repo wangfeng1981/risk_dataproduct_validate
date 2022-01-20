@@ -25,6 +25,7 @@ using namespace std;
 int main(int argc , char * argv[]){
 	string version = "v1.0.0 2022-1-14" ;
 	version += "\nv1.1.0 2022-1-20" ;
+	version += "\nv1.2.2 2022-1-20 add shp extent check, shp class value check, bugfixed for ok01 checking." ;
 
 	cout<<"A program to server risk product validate. by wf 2022-1-14."<<endl ;
 	cout<<version<<endl ;
@@ -67,56 +68,123 @@ int main(int argc , char * argv[]){
     	if( req.has_param("infile") ){
     		 string inputFilename = req.get_param_value("infile");
     		 spdlog::info("try to check {}" , inputFilename);
-    		//0.检查数据类型与取值范围
-		    string error01 ;
-		    bool ok01 = RiskValidateTool::isGeoTiff_Integer(inputFilename,error01) ;
-		    spdlog::info("输入数据是否是整形以及无异常值:{} , 错误信息:{}" , ok01 ,error01 ) ;
+
+    		 //根据文件名结尾判断是tif，tiff还是shp
+    		 bool fileNameOk = false ;
+    		 bool isShp = false ;
+    		 string fileNameError ;
+    		 string baseName = wStringUtils::getFileNameFromFilePath(inputFilename);
+    		 if( baseName.length() < 10 ){
+    		 	fileNameError = string("文件名不符合规范:")+baseName;
+    		 	fileNameOk = false ;
+    		 }else{
+    		 	string tail4 = wStringUtils::toLower(baseName.substr( baseName.length() - 4 )) ;//.tif tiff .shp
+    		 	if( tail4.compare(".tif") == 0 || tail4.compare("tiff")==0  ){
+    		 		//file name is good
+    		 		fileNameOk = true ;
+    		 		isShp = false ;
+    		 	}
+    		 	else if(  tail4.compare(".shp")==0 ){
+    		 		fileNameOk = true ;
+    		 		isShp = true ;
+    		 	}
+    		 	else{
+    		 		fileNameError="文件扩展名不是 .tif .tiff .shp 中的一种";
+    		 		fileNameOk = false ;
+    		 	}
+    		 }
+
+    		 if( fileNameOk==false ){
+    		 	spdlog::info(fileNameError) ;
+    		 	state = "9";
+		        message = fileNameError;
+    		 }
+    		 else {
+    		 	if( isShp==true )
+    		 	{
+    		 		spdlog::info("it is shp.") ;
+
+    		 		string error1 , error1detail;
+    		 		bool ok1 = RiskValidateTool::isShp_ExtentOk(standardCodeRasterFile,inputFilename,error1) ;
+    		 		if( ok1==false ) error1detail = RiskValidateTool::getErrorDetail();
+    		 		spdlog::info("矢量范围正确:{} , 错误信息:{} . {}" , ok1 ,error1 , RiskValidateTool::getErrorDetail() ) ;
+
+    		 		string error2 ;
+    		 		bool ok2 = RiskValidateTool::isShp_classValueOk(inputFilename,error2) ;
+    		 		spdlog::info("矢量class值正确:{} , 错误信息:{}" , ok2 ,error2 ) ;
+
+					if( ok1==true && ok2==true ){
+				    	state = "0";
+				        message = "输入数据通过正确性检验";
+				        spdlog::info("{} 输入数据通过正确性检验",inputFilename);
+				    }else{
+				        string outmsg ;
+				        if( ok1==false ){
+				            outmsg+=error1+","+ error1detail +";" ;
+				        }
+				        if( ok2==false ){
+				            outmsg+=error2+";" ;
+				        }
+				        state = "9";
+				        message = outmsg;
+				        spdlog::info("{} 输入数据没有通过检验，错误信息:{}",inputFilename, outmsg);
+				    }
+    		 	}else
+    		 	{//tif
+    		 		spdlog::info("it is tif.") ;
+    		 		//0.检查数据类型与取值范围
+				    string error01 ;
+				    bool ok01 = RiskValidateTool::isGeoTiff_Integer(inputFilename,error01) ;
+				    spdlog::info("输入数据是否是整形以及无异常值:{} , 错误信息:{}" , ok01 ,error01 ) ;
 
 
-		    //1.检查坐标系是否CGCS2000
-		    string error1 ;
-		    bool ok1 = RiskValidateTool::isGeoTiff_CGCS2000(inputFilename,error1) ;
-		    spdlog::info("输入数据坐标系是否是CGCS2000:{} , 错误信息:{}" , ok1 ,error1 ) ;
+				    //1.检查坐标系是否CGCS2000
+				    string error1 ;
+				    bool ok1 = RiskValidateTool::isGeoTiff_CGCS2000(inputFilename,error1) ;
+				    spdlog::info("输入数据坐标系是否是CGCS2000:{} , 错误信息:{}" , ok1 ,error1 ) ;
 
 
-		    //2.检查分辨率是否30秒，如果这一步没通过，不进行第三步检查
-		    string error2 ;
-		    bool ok2 = RiskValidateTool::isGeoTiff_GridSizeOK(inputFilename,error2) ;
-		    spdlog::info("输入数据是否是30秒分辨率:{} , 错误信息:{}" , ok2 ,error2) ;
+				    //2.检查分辨率是否30秒，如果这一步没通过，不进行第三步检查
+				    string error2 ;
+				    bool ok2 = RiskValidateTool::isGeoTiff_GridSizeOK(inputFilename,error2) ;
+				    spdlog::info("输入数据是否是30秒分辨率:{} , 错误信息:{}" , ok2 ,error2) ;
 
 
-		    //3.检查行政范围与标准格网是否一致
-		    string error3 ;
-		    bool ok3 = RiskValidateTool::isGeoTiff_ExtentOk(standardCodeRasterFile,inputFilename,error3);
-		    spdlog::info("输入数据对应行政区划是否与标准网格一致:{} , 错误信息:{}" , ok3 ,error3) ;
+				    //3.检查行政范围与标准格网是否一致
+				    string error3 ;
+				    bool ok3 = RiskValidateTool::isGeoTiff_ExtentOk(standardCodeRasterFile,inputFilename,error3);
+				    spdlog::info("输入数据对应行政区划是否与标准网格一致:{} , 错误信息:{}" , ok3 ,error3) ;
 
-		    bool outputJsonOk = false;
-		    if( ok1==true && ok2==true && ok3==true ){
-		    	state = "0";
-		        message = "输入数据通过正确性检验";
-		        spdlog::info("{} 输入数据通过正确性检验",inputFilename);
-		    }else{
-		        string outmsg ;
-		         if( ok01==false ){
-		            //outmsg += "输入数据不是整形或者存在无异常值，详细信息：" + error01 + ";";
-		            outmsg+=error01+";" ;
-		        }
-		        if( ok1==false ){
-		            //outmsg += "输入数据不是CGCS2000坐标，详细信息：" + error1 + ";";
-		            outmsg+=error1+";" ;
-		        }
-		        if( ok2==false ){
-		            //outmsg += "输入数据分辨率不是30秒，详细信息：" + error2 + ";";
-		            outmsg+=error2+";" ;
-		        }
-		        if( ok3==false ){
-		            //outmsg += "输入数据对应行政区划与标准网格不匹配，详细信息：" + error3 + ";";
-		            outmsg+=error3+";" ;
-		        }
-		        state = "9";
-		        message = outmsg;
-		        spdlog::info("{} 输入数据没有通过检验，错误信息:{}",inputFilename, outmsg);
-		    }
+				    bool outputJsonOk = false;
+				    if( ok01==true && //bugfixed 2022-1-20
+				    	 ok1==true && ok2==true && ok3==true ){
+				    	state = "0";
+				        message = "输入数据通过正确性检验";
+				        spdlog::info("{} 输入数据通过正确性检验",inputFilename);
+				    }else{
+				        string outmsg ;
+				         if( ok01==false ){
+				            //outmsg += "输入数据不是整形或者存在无异常值，详细信息：" + error01 + ";";
+				            outmsg+=error01+";" ;
+				        }
+				        if( ok1==false ){
+				            //outmsg += "输入数据不是CGCS2000坐标，详细信息：" + error1 + ";";
+				            outmsg+=error1+";" ;
+				        }
+				        if( ok2==false ){
+				            //outmsg += "输入数据分辨率不是30秒，详细信息：" + error2 + ";";
+				            outmsg+=error2+";" ;
+				        }
+				        if( ok3==false ){
+				            //outmsg += "输入数据对应行政区划与标准网格不匹配，详细信息：" + error3 + ";";
+				            outmsg+=error3+";" ;
+				        }
+				        state = "9";
+				        message = outmsg;
+				        spdlog::info("{} 输入数据没有通过检验，错误信息:{}",inputFilename, outmsg);
+				    }
+    		 	}
+    		 }
     	}else{
     		state = "1";
     		message = "no infile params." ;
