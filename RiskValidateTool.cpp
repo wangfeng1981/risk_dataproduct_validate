@@ -51,7 +51,10 @@
 /// V1.4.1 2022-1-20
 /// (1)修复计算栅格数据范围的bug
 
-string RiskValidateTool::version = "v1.4.1";
+/// V1.4.2 2022-1-25
+/// (1)修复读取无效shp程序崩溃的bug
+
+string RiskValidateTool::version = "v1.4.2";
 double RiskValidateTool::eps =  0.000001;//2022-1-20
 string RiskValidateTool::errorDetail = "" ;
 
@@ -236,7 +239,6 @@ bool RiskValidateTool::isShp_ExtentOk(string standardfilename,string shpfile, st
 		return false;
 	}
 
-
 	GDALDataset* poDS = (GDALDataset*) GDALOpenEx( shpfile.c_str() , GDAL_OF_VECTOR, NULL, NULL, NULL );
 	if( poDS==nullptr ){
 		error = "读取矢量文件失败" ;
@@ -266,6 +268,12 @@ bool RiskValidateTool::isShp_ExtentOk(string standardfilename,string shpfile, st
 
 	GDALClose(poDS) ;
 
+	// bugfixed 2022-1-25 env有可能不是经纬度坐标，这会导致sprintf 128的数组崩溃。
+	if( fabs(env.MinX)> 1000.0 || fabs(env.MaxX)> 1000.0 || fabs(env.MaxY)> 1000.0 || fabs(env.MinY)> 1000.0  ){
+		errorDetail = string("输入数据空间范围超过有效的经纬度范围");
+		error = string("输入数据空间范围超过有效的经纬度范围");
+		return false ;
+	}
 
 	if (fabs(standleft - env.MinX ) > eps || fabs(standright - env.MaxX) > eps ||
 		fabs(standtop - env.MaxY) > eps || fabs(standbottom - env.MinY) > eps)
@@ -374,7 +382,6 @@ bool RiskValidateTool::isShp_classValueOk(string shpfilename,string& error) //20
 		OGRFeature::DestroyFeature(poFeature) ;
 		if( whileState!=0 ) break ;//跳出循环
 	}
-
 	GDALClose(poDS) ;
 
 	if( whileState == 1 ){
@@ -384,7 +391,6 @@ bool RiskValidateTool::isShp_classValueOk(string shpfilename,string& error) //20
 		error = string("存在矢量要素class字段值超出范围:")+validDesc ;
 		return false ;
 	}
-
 	return true ;
 }
 

@@ -9,6 +9,7 @@
 #include <vector>
 #include  <memory>
 #include "ogrsf_frmts.h"
+#include <iostream>
 using std::string;
 using std::vector;
 
