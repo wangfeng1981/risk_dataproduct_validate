@@ -26,6 +26,7 @@ int main(int argc , char * argv[]){
 	string version = "v1.0.0 2022-1-14" ;
 	version += "\nv1.1.0 2022-1-20" ;
 	version += "\nv1.2.2 2022-1-20 add shp extent check, shp class value check, bugfixed for ok01 checking." ;
+	version += "\nv1.3.0 2022-1-25 add error detail for tif 02 03 checking." ;
 
 	cout<<"A program to server risk product validate. by wf 2022-1-14."<<endl ;
 	cout<<version<<endl ;
@@ -145,15 +146,18 @@ int main(int argc , char * argv[]){
 
 
 				    //2.检查分辨率是否30秒，如果这一步没通过，不进行第三步检查
-				    string error2 ;
+				    string error2  ;
 				    bool ok2 = RiskValidateTool::isGeoTiff_GridSizeOK(inputFilename,error2) ;
 				    spdlog::info("输入数据是否是30秒分辨率:{} , 错误信息:{}" , ok2 ,error2) ;
+				    string detailError2 = RiskValidateTool::getErrorDetail();
 
 
 				    //3.检查行政范围与标准格网是否一致
 				    string error3 ;
 				    bool ok3 = RiskValidateTool::isGeoTiff_ExtentOk(standardCodeRasterFile,inputFilename,error3);
-				    spdlog::info("输入数据对应行政区划是否与标准网格一致:{} , 错误信息:{}" , ok3 ,error3) ;
+				    spdlog::info("输入数据对应行政区划是否与标准网格一致:{} , 错误信息:{},{}" , ok3 ,error3,
+				    	RiskValidateTool::getErrorDetail() ) ;
+				    string detailError3 = RiskValidateTool::getErrorDetail() ;
 
 				    bool outputJsonOk = false;
 				    if( ok01==true && //bugfixed 2022-1-20
@@ -173,11 +177,11 @@ int main(int argc , char * argv[]){
 				        }
 				        if( ok2==false ){
 				            //outmsg += "输入数据分辨率不是30秒，详细信息：" + error2 + ";";
-				            outmsg+=error2+";" ;
+				            outmsg+=error2+"," + detailError2 + ";" ;
 				        }
 				        if( ok3==false ){
 				            //outmsg += "输入数据对应行政区划与标准网格不匹配，详细信息：" + error3 + ";";
-				            outmsg+=error3+";" ;
+				            outmsg+=error3+"," + detailError3 + ";" ;
 				        }
 				        state = "9";
 				        message = outmsg;
