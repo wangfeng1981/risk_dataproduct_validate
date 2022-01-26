@@ -6,6 +6,10 @@ using std::stringstream ;
 #define WGDALRASTER_H_IMPLEMENTATION
 #include "wGdalRaster.h"
 #include "wstringutils.h"
+#include <iostream>
+
+using std::cout;
+using std::endl;
 
 /// V1.0.0
 ///   第一个版本 2022-1-7
@@ -64,9 +68,111 @@ using std::stringstream ;
 /// /// V1.4.4 2022-1-25
 /// (1)补充部分详细信息输出
 
-string RiskValidateTool::version = "v1.4.4";
+/// V1.5.0 2022-1-26
+/// (1)优化错误信息输出,去掉detailError.
+/// (2)增加一个一步检验函数checkInOne
+/// (3)增加Uint32数据的支持
+/// (4)多线程安全
+
+string RiskValidateTool::version = "v1.5.0";
 double RiskValidateTool::eps =  0.000001;//2022-1-20
-string RiskValidateTool::errorDetail = "" ;
+
+
+//2022-1-26 一步全检验
+bool RiskValidateTool::checkInOne( string standardfilename, string inputfilename, string& error ,bool debug) 
+{
+	if( debug ){
+		cout<<"**** **** **** **** **** ****"<<endl ;
+		cout<<"RiskValidateTool::checkInOne"<<endl ;
+		cout<<"standardfilename:"<<standardfilename<<endl ;
+		cout<<"inputfilename:"<<inputfilename<<endl ;
+		cout<<"debug:"<<debug<<endl ;
+	}
+
+	if( debug )cout<<"debug baseName check"<<endl ;
+	//根据文件名结尾判断是tif，tiff还是shp
+	string baseName = wStringUtils::getFileNameFromFilePath(inputfilename);
+	if( baseName.length() < 5 ){
+		error = "文件名过短,不符合规范." ;
+		if( debug ) cout<<error<<endl ;
+		return false ;
+	}
+
+	if( debug )cout<<"debug tif/shp check"<<endl ;
+	bool isShp = false ;
+	string tail4 = wStringUtils::toLower(baseName.substr( baseName.length() - 4 )) ;//.tif tiff .shp
+	if( tail4.compare(".tif") == 0 || tail4.compare("tiff")==0  ){
+		//file name is good
+		if( debug ) cout<<"it's tif"<<endl ;
+		isShp = false ;
+	}
+	else if( tail4.compare(".shp")==0 ){
+		if( debug ) cout<<"it's shp"<<endl ;
+		isShp = true ;
+	}
+	else{
+		error ="文件扩展名不是 .TIF .TIFF .SHP .tif .tiff .shp 中的一种.";
+		if( debug ) cout<<error<<endl ;
+		return false ;
+	}
+
+	if( isShp==true )
+	{
+		if( debug ) cout<<"checking for shp"<<endl ;
+		string error1 ;
+		bool ok1 = RiskValidateTool::isShp_ExtentOk(standardfilename,inputfilename,error1) ;
+		if(debug) cout<<"shp extent ok:"<<ok1<<","<<error1<<endl ;
+		if(ok1==false) error += "矢量范围检测未通过:" + error1 + ";" ;
+
+		string error2 ;
+		bool ok2 = RiskValidateTool::isShp_classValueOk(inputfilename,error2) ;
+		if( debug ) cout<<"shp class ok:"<<ok2<<","<<error2 ;
+		if( ok2==false ) error += "矢量class属性值检测未通过:"+error2 +";" ;
+
+		if( ok1==true && ok2==true ){
+	        if( debug ) cout<<"shp is good"<<endl ;
+	        return true ;
+	    }else{
+	        if( debug ) cout<<"shp is bad:"<<error<<endl ;
+	        return false ;
+	    }
+	}else
+	{//tif
+		if( debug ) cout<<"checking for tif"<<endl ;
+		//0.检查数据类型与取值范围
+	    string error1 ;
+	    bool ok1 = RiskValidateTool::isGeoTiff_Integer(inputfilename,error1) ;
+	    if(ok1==false) error += "栅格数据像素值检测未通过:" + error1 + ";" ;
+
+	    //1.检查坐标系是否CGCS2000
+	    // string error2 ;
+	    // bool ok2 = RiskValidateTool::isGeoTiff_CGCS2000(inputfilename,error2) ;
+	    // spdlog::info("输入数据坐标系是否是CGCS2000:{} , 错误信息:{}" , ok1 ,error1 ) ;
+
+
+	    //2.检查分辨率是否30秒，如果这一步没通过，不进行第三步检查
+	    string error3  ;
+	    bool ok3 = RiskValidateTool::isGeoTiff_GridSizeOK(inputfilename,error3) ;
+	    if(ok3==false) error+="栅格数据分辨率检测未通过:" + error3 +";" ;
+
+
+	    //3.检查行政范围与标准格网是否一致
+	    string error4 ;
+	    bool ok4 = RiskValidateTool::isGeoTiff_ExtentOk(standardfilename,inputfilename,error4);
+	    if( ok4==false ) error += "栅格数据与标准网格一致性检测未通过:" + error4 + ";" ;
+
+	    if( ok1 ==true &&  ok3==true && ok4==true ){
+	    	if( debug ) cout<<"tif is good"<<endl ;
+	    	return true ;
+	    }else{
+	    	if( debug ) cout<<"tif is bad:"<<error <<endl ;
+        	return false ;
+        }
+	}
+	//will not go there
+	cout<<"will not go there."<<endl ;
+	return false ;
+}
 
 bool RiskValidateTool::isGeoTiff_CGCS2000(string rasterfile, string& error)
 {
@@ -98,7 +204,7 @@ bool RiskValidateTool::isGeoTiff_CGCS2000(string rasterfile, string& error)
 
 		if (cgcs2000wktHead.compare(inputWktHead) != 0 || cgcs2000wktTail.compare(inputWktTail) != 0 )
 		{
-            errorDetail = string("输入文件不是标准CGCS2000坐标系(2),输入数据wkt为:") + inputWkt;
+            //errorDetail = string("输入文件不是标准CGCS2000坐标系(2),输入数据wkt为:") + inputWkt;
 			error = string("输入文件不是CGCS2000坐标系");
 			return false;
 		}
@@ -122,34 +228,18 @@ bool RiskValidateTool::isGeoTiff_GridSizeOK(string rasterfile, string& error)
 
 	const double* trans = raster->getTrans();
 	double transVal[6];
-    bool hasVeryBigValue = false ;
+
     for (int i = 0; i < 6; ++i) {
         transVal[i] = trans[i];
-        if( fabs(transVal[i]) >1000){
-            hasVeryBigValue = true ;
-        }
     }
 	delete raster;
 
-    string geotransStr ;
-    if(hasVeryBigValue==true){
-        stringstream ss ;
-        ss<<transVal[0]<<","<<transVal[1]<<","<<transVal[2]<<","<<transVal[3]<<","<<transVal[4]<<","<<transVal[5] ;
-        geotransStr = ss.str();
-    }else{
-        char buff[1024];
-        sprintf(buff, "(%15.10f,%15.10f,%15.10f,%15.10f,%15.10f,%15.10f)",
-                transVal[0],
-                transVal[1],
-                transVal[2],
-                transVal[3],
-                transVal[4],
-                transVal[5]
-                )
-                ;
-        geotransStr = string(buff) ;
-    }
-
+    string geotransStr = double2str(transVal[0]) + ","+
+					    double2str(transVal[1]) + ","+
+					    double2str(transVal[2]) + ","+
+					    double2str(transVal[3]) + ","+
+					    double2str(transVal[4]) + ","+
+					    double2str(transVal[5]) ;
 
 	// 30''
 	const double thirtySeconds = 30.0 / 3600.0;
@@ -162,17 +252,13 @@ bool RiskValidateTool::isGeoTiff_GridSizeOK(string rasterfile, string& error)
 			goodReso = true;
         }
     }else{
-        errorDetail = string("输入栅格数据坐标转换六参数第3,第5不为0:") + geotransStr ;
-        error = string("输入文件格网分辨率不是30''");
+        error = string("输入栅格数据坐标转换六参数第3,第5不为0,") + geotransStr ;
         return false ;
     }
 
 	if (goodReso == false) {
-		char buffer1[64];
-		sprintf(buffer1, "(%15.10f)", thirtySeconds);
-        errorDetail = string("输入栅格数据坐标转换六参数第2和第6不符合30秒")
-                + buffer1 + ",输入数据六参数:" + geotransStr;
-		error = string("输入文件格网分辨率不是30''");
+		error = string("输入文件网格分辨率 (") 
+			+ double2str(transVal[1]) + "," + double2str(transVal[5]) + ") 不等于30秒分辨率("+ double2str(thirtySeconds) +")";
 		return false;
 	}
 
@@ -191,16 +277,14 @@ bool RiskValidateTool::isGeoTiff_ExtentOk(string standardfilename,string rasterf
 	string fileName = wStringUtils::getFileNameFromFilePath(rasterfilename);
 	vector<string> strArr = wStringUtils::splitString(fileName, "_");
 	if (strArr.size() < 5) {
-		errorDetail = "";
-		error = string("输入文件文件名不规范:") + fileName + ", 文件名规范为:灾害类别代码_成果类型_数据对象细化代码_6位行政区划编码_序号(01-99).xxx";
+		error = string("输入文件文件名 ") + fileName + " 不规范, 文件名规范为:灾害类别代码_成果类型_数据对象细化代码_6位行政区划编码_序号(01-99).xxx";
 		return false;
 	}
 
 	string xzcodeStr = strArr[3];
 	bool isAllNum = wStringUtils::isAllNumber(xzcodeStr);
 	if (isAllNum == false) {
-		errorDetail = "" ;
-		error = string("行政区划编码无效:") + xzcodeStr;
+		error = string("行政区划编码 ") + xzcodeStr + " 存在非数字字符";
 		return false;
 	}
 	int xycodei = atof(xzcodeStr.c_str());
@@ -210,17 +294,17 @@ bool RiskValidateTool::isGeoTiff_ExtentOk(string standardfilename,string rasterf
 	int standcnt = 0;
 	int incnt = 0;
 
-	bool standExtentOk = computeExtentByCode(standardfilename, xycodei, standleft, standright, standtop, standbottom, standcnt, error);
+	string error1 ;
+	bool standExtentOk = computeExtentByCode(standardfilename, xycodei, standleft, standright, standtop, standbottom, standcnt, error1);
 	if (standExtentOk == false) {
-		errorDetail = "" ;
-		error = string("获取标准行政区划四角范围失败") ;
+		error = string("计算行政区划标准网格四角范围失败,")+error1 ;
 		return false;
 	}
 
-	bool inExtentOk = computeValidExtent(rasterfilename,   inleft, inright, intop, inbottom, incnt, error);
+	string error2 ;
+	bool inExtentOk = computeValidExtent(rasterfilename,   inleft, inright, intop, inbottom, incnt, error2);
 	if (inExtentOk == false) {
-		errorDetail = "" ;
-		error = string("获取输入数据四角范围失败") ;
+		error = string("计算输入数据四角范围失败,")+error2 ;
 		return false;
 	}
 
@@ -228,30 +312,25 @@ bool RiskValidateTool::isGeoTiff_ExtentOk(string standardfilename,string rasterf
 		//error = string("输入数据网格数量(")+ wStringUtils::int2str(incnt) + ")与行政区标准网格数量(" 
 		//	+ wStringUtils::int2str(standcnt) +")不匹配" ;
 		char buff[1024] ;
-		sprintf(buff , "标准网格数量:%d,输入数据网格数量:%d" , standcnt , incnt) ;
-		errorDetail = string(buff) ;
-		error = string("输入文件与标准格网不完全重合(E1)");
+		sprintf(buff , "该行政区划标准网格数量(%d)与输入数据有效网格数量(%d)不一致" , standcnt , incnt) ;
+		error = string(buff);
 		return false;
 	}
 
 	if (fabs(standleft - inleft) > eps || fabs(standright - inright) > eps ||
 		fabs(standtop - intop) > eps || fabs(standbottom - inbottom) > eps)
 	{
-		char buffer1[1024];
-		char buffer2[1024];
-		sprintf(buffer1, "%15.10f,%15.10f,%15.10f,%15.10f", inleft, inright, intop, inbottom);
-		sprintf(buffer2, "%15.10f,%15.10f,%15.10f,%15.10f", standleft, standright, standtop, standbottom);
-        errorDetail = string("输入数据空间范围(") + string(buffer1) + ")与行政区标准网格空间范围("
-            + string(buffer2) + ")不匹配";
-		error = string("输入文件与标准格网不完全重合(E2)");
+		string extentstr1 = double2str(inleft)+","+double2str(inright)+","+double2str(intop)+","+double2str(inbottom)  ;
+		string extentstr2 = double2str(standleft)+","+double2str(standright)+","+double2str(standtop)+","+double2str(standbottom) ;
+		error = string("输入数据空间范围( ") + extentstr2 + " )与标准格网空间范围( "+extentstr1+" )不完全重合";
 		return false;
 	}
 
 	vector<RiskValidateToolPointI> unMatchPoints;
-	bool matchOk = checkEveryGridMatching(standardfilename, xycodei, rasterfilename,  unMatchPoints, error);
+	string errorM ;
+	bool matchOk = checkEveryGridMatching(standardfilename, xycodei, rasterfilename,  unMatchPoints, errorM);
 	if (matchOk == false) {
-		errorDetail = "" ;
-		error = string("输入文件与标准格网不完全重合(E3)");
+		error = string("输入文件与标准格网不完全重合(E3),") + errorM ;
 		return false;
 	}
 
@@ -265,14 +344,14 @@ bool RiskValidateTool::isShp_ExtentOk(string standardfilename,string shpfile, st
 	string fileName = wStringUtils::getFileNameFromFilePath(shpfile);
 	vector<string> strArr = wStringUtils::splitString(fileName, "_");
 	if (strArr.size() < 5) {
-		error = string("输入文件文件名不规范:") + fileName + ", 文件名规范为:灾害类别代码_成果类型_数据对象细化代码_6位行政区划编码_序号(01-99).xxx";
+		error = string("输入文件文件名 ") + fileName + " 不规范, 文件名规范为:灾害类别代码_成果类型_数据对象细化代码_6位行政区划编码_序号(01-99).xxx";
 		return false;
 	}
 
 	string xzcodeStr = strArr[3];
 	bool isAllNum = wStringUtils::isAllNumber(xzcodeStr);
 	if (isAllNum == false) {
-		error = string("行政区划编码无效:") + xzcodeStr;
+		error = string("行政区划编码 ") + xzcodeStr+" 不规范，包含非数字字符";
 		return false;
 	}
 	int xycodei = atof(xzcodeStr.c_str());
@@ -284,7 +363,7 @@ bool RiskValidateTool::isShp_ExtentOk(string standardfilename,string shpfile, st
 	bool standExtentOk = computeExtentByCode(standardfilename, xycodei, standleft, 
 		standright, standtop, standbottom, standcnt, error1);
 	if (standExtentOk == false) {
-		error = string("计算标准格网范围失败：")+error1 ;
+		error = string("计算标准格网范围失败,")+error1 ;
 		return false;
 	}
 
@@ -317,23 +396,13 @@ bool RiskValidateTool::isShp_ExtentOk(string standardfilename,string shpfile, st
 
 	GDALClose(poDS) ;
 
-	// bugfixed 2022-1-25 env有可能不是经纬度坐标，这会导致sprintf 128的数组崩溃。
-	if( fabs(env.MinX)> 1000.0 || fabs(env.MaxX)> 1000.0 || fabs(env.MaxY)> 1000.0 || fabs(env.MinY)> 1000.0  ){
-		errorDetail = string("输入数据空间范围超过有效的经纬度范围");
-		error = string("输入数据空间范围超过有效的经纬度范围");
-		return false ;
-	}
 
 	if (fabs(standleft - env.MinX ) > eps || fabs(standright - env.MaxX) > eps ||
 		fabs(standtop - env.MaxY) > eps || fabs(standbottom - env.MinY) > eps)
 	{
-		char buffer1[128];
-		char buffer2[128];
-		sprintf(buffer1, "%15.10f,%15.10f,%15.10f,%15.10f", env.MinX, env.MaxX, env.MaxY, env.MinY);
-		sprintf(buffer2, "%15.10f,%15.10f,%15.10f,%15.10f", standleft, standright, standtop, standbottom);
-        errorDetail = string("输入数据空间范围(") + string(buffer1) + ")与行政区标准网格空间范围("
-            + string(buffer2) + ")不匹配";
-		error = string("输入文件与标准格网不完全重合");
+		string extentstr1 = double2str(env.MinX)+","+double2str(env.MaxX)+","+double2str(env.MaxY)+","+double2str(env.MinY)  ;
+		string extentstr2 = double2str(standleft)+","+double2str(standright)+","+double2str(standtop)+","+double2str(standbottom) ;
+		error = string("输入数据空间范围( ") + extentstr2 + " )与标准格网空间范围( "+extentstr1+" )不完全重合";
 		return false;
 	}
 
@@ -347,13 +416,13 @@ bool RiskValidateTool::isShp_classValueOk(string shpfilename,string& error) //20
 	string fileName = wStringUtils::getFileNameFromFilePath(shpfilename);
 	vector<string> strArr = wStringUtils::splitString(fileName, "_");
 	if (strArr.size() < 5) {
-		error = string("输入文件文件名不规范:") + fileName + ", 文件名规范为:灾害类别代码_成果类型_数据对象细化代码_6位行政区划编码_序号(01-99).xxx";
+		error = string("输入文件文件名 ") + fileName + " 不规范,文件名规范为:灾害类别代码_成果类型_数据对象细化代码_6位行政区划编码_序号(01-99).xxx";
 		return false;
 	}
 
 	bool pcodeOk = wStringUtils::isAllNumber( strArr[2] ) ;
 	if( pcodeOk ==false ){
-		error = string("输入文件文件名中数据对象细化代码无效:") +strArr[2];
+		error = string("输入文件文件名中数据对象细化代码 ") +strArr[2] + " 存在非数字字符";
 		return false;
 	}
 
@@ -387,7 +456,7 @@ bool RiskValidateTool::isShp_classValueOk(string shpfilename,string& error) //20
 	}
 
 	if( findZH==false ){
-		error = string("灾害代码无效:") +zhCode;
+		error = string("灾害代码 ") +zhCode + " 不是标准代码";
 		return false ;
 	}
 
@@ -415,6 +484,7 @@ bool RiskValidateTool::isShp_classValueOk(string shpfilename,string& error) //20
 	pLayer->ResetReading();
 	//逐个要素核对分级数值
 	int whileState = 0 ;//0 is all good , 1 is feature no class field , 2  bad value
+	int theBadValue = 0 ;
 	while( (poFeature = pLayer->GetNextFeature()) != NULL ){
 		//注意GetNextFeature 返回的指针需要调用者释放
 		int fieldIndex = poFeature->GetFieldIndex("class") ;
@@ -426,6 +496,7 @@ bool RiskValidateTool::isShp_classValueOk(string shpfilename,string& error) //20
 			if( clsVal < validMin || clsVal > validMax ){
 				//bad value
 				whileState = 2 ;
+				theBadValue = clsVal ;
 			}
 		}
 		OGRFeature::DestroyFeature(poFeature) ;
@@ -437,7 +508,7 @@ bool RiskValidateTool::isShp_classValueOk(string shpfilename,string& error) //20
 		error = "存在矢量要素没有class字段" ;
 		return false ;
 	}else if( whileState==2 ){
-		error = string("存在矢量要素class字段值超出范围:")+validDesc ;
+		error = string("存在矢量要素class字段值 ") + int2str(theBadValue) + " 超出范围"+validDesc ;
 		return false ;
 	}
 	return true ;
@@ -572,14 +643,12 @@ bool RiskValidateTool::checkEveryGridMatching(string standardfilename, int code,
 	std::shared_ptr<wGdalRaster> standardGridPtr(wGdalRasterFactory::OpenFile(standardfilename));
 	if (standardGridPtr.get() == 0) {
         error = "打开标准网格数据文件失败";
-        errorDetail = error ;
 		return false;
 	}
 
 	std::shared_ptr<wGdalRaster> rasterPtr(wGdalRasterFactory::OpenFile(rasterfilename));
 	if (rasterPtr.get() == 0) {
 		error = "打开输入栅格数据文件失败";
-        errorDetail = error ;
 		return false;
 	}
 
@@ -588,7 +657,6 @@ bool RiskValidateTool::checkEveryGridMatching(string standardfilename, int code,
 	bool codeOk = computeXzCode(code, codeLow, codeHigh);
 	if (codeOk == false) {
 		error = "行政编码无效:" + wStringUtils::int2str(code);
-        errorDetail = error ;
 		return false;
 	}
 
@@ -598,7 +666,7 @@ bool RiskValidateTool::checkEveryGridMatching(string standardfilename, int code,
 	int rxsize = rasterPtr->getXSize();
 	int rysize = rasterPtr->getYSize();
 
-	int fillValue = rasterPtr->getNoDataValue() ;//2022-1-20
+	double fillValue = rasterPtr->getNoDataValue() ;//2022-1-20
 
 
 	const double* trans = rasterPtr->getTrans();
@@ -609,7 +677,7 @@ bool RiskValidateTool::checkEveryGridMatching(string standardfilename, int code,
 	{
 		for (int ix = 0; ix < rxsize; ++ix)
 		{
-			int pxval = rasterPtr->getValuei(ix, iy, 0);
+			double pxval = rasterPtr->getValued(ix, iy, 0);
 			if (pxval != fillValue)
 			{
 				double pixelcenterx = trans[0] + trans[1] * (ix+0.5) ;
@@ -649,11 +717,13 @@ bool RiskValidateTool::checkEveryGridMatching(string standardfilename, int code,
 	}
 
 	if (unmatchCount > 0) {
-		error = string("输入栅格数据不在标准网格中格点的数量：") + wStringUtils::int2str(unmatchingPoints.size())+ ",前三个不在标准网格中输入数据格点坐标:";
-		for (int iun = 0; iun < unmatchingPoints.size(); ++iun) {
-			error += "(" + wStringUtils::int2str(unmatchingPoints[iun].x) + "," + wStringUtils::int2str(unmatchingPoints[iun].y) + ") ";
-        }
-        errorDetail = error ;
+		// error = string("输入栅格数据不在标准网格中格点的数量：") + wStringUtils::int2str(unmatchingPoints.size())+ ",前三个不在标准网格中输入数据格点坐标:";
+		// for (int iun = 0; iun < unmatchingPoints.size(); ++iun) {
+		// 	error += "(" + wStringUtils::int2str(unmatchingPoints[iun].x) + "," + wStringUtils::int2str(unmatchingPoints[iun].y) + ") ";
+  //       }
+  //       errorDetail = error ;
+		error = string("输入数据存在像素")+ 
+			"(x:" + int2str(unmatchingPoints[0].x) + ", y:"+ int2str(unmatchingPoints[0].y) + ") 不在该行政区标准网格范围内";
 		return false;
 	}
 
@@ -704,13 +774,13 @@ bool RiskValidateTool::isGeoTiff_Integer(string rasterfilename,string& error)
 	string fileName = wStringUtils::getFileNameFromFilePath(rasterfilename);
 	vector<string> strArr = wStringUtils::splitString(fileName, "_");
 	if (strArr.size() < 5) {
-		error = string("输入文件文件名不规范:") + fileName + ", 文件名规范为:灾害类别代码_成果类型_数据对象细化代码_6位行政区划编码_序号(01-99).xxx";
+		error = string("输入文件文件名 ") + fileName + " 不规范,文件名规范为:灾害类别代码_成果类型_数据对象细化代码_6位行政区划编码_序号(01-99).xxx";
 		return false;
 	}
 
 	bool pcodeOk = wStringUtils::isAllNumber( strArr[2] ) ;
 	if( pcodeOk ==false ){
-		error = string("输入文件文件名中数据对象细化代码无效:") +strArr[2];
+		error = string("输入文件文件名中数据对象细化代码 ") +strArr[2] + " 存在非数字字符" ;
 		return false;
 	}
 
@@ -730,16 +800,22 @@ bool RiskValidateTool::isGeoTiff_Integer(string rasterfilename,string& error)
 		error = "打开输入栅格数据文件失败";
 		return false;
 	}
-	int noDataVal = rasterPtr->getNoDataValue() ;//2022-1-20
+	double noDataVal = rasterPtr->getNoDataValue() ;//2022-1-20
 	GDALDataType dataType = rasterPtr->getDataType();
 	if( dataType != GDT_Byte && dataType!= GDT_UInt16 && dataType != GDT_Int16 && dataType != GDT_UInt32 && dataType!= GDT_Int32 )
 	{
+		string badTypeStr = "UNKNOWN" ;
+		if( dataType==GDT_Float32 ){
+			badTypeStr="Float32";
+		}else if( dataType==GDT_Float64) {
+			badTypeStr="Float64";
+		}
 		//error = string("输入栅格数据的数据类型不是整形，请转换为如下类型Byte(推荐),UInt16,Int16,UInt32,Int32重新检验") ;
-		error = string("输入栅格数据的数据类型不是整形");
+		error = string("输入栅格数据的数据类型 ")+ badTypeStr + "不是整形";
 		return false ;
 	}
 
-	
+	double theBadValue = 0 ;
 	int outOfRangePixelCount = 0 ;
 	int xsize = rasterPtr->getXSize() ;
 	int ysize = rasterPtr->getYSize() ;
@@ -747,28 +823,53 @@ bool RiskValidateTool::isGeoTiff_Integer(string rasterfilename,string& error)
 	{
 		for(int ix = 0 ; ix < xsize; ++ ix )
 		{
-			int pxval = rasterPtr->getValuei(ix,iy,0) ;
+			double pxval = rasterPtr->getValued(ix,iy,0) ;
 			if( pxval == noDataVal ) continue ;//2022-1-20
 			if( pxval < validMin || pxval > validMax )
 			{
 				++outOfRangePixelCount;
+				theBadValue = pxval; 
 			}
 
 		}
 	}
 
 	if( outOfRangePixelCount>0 ){
+		stringstream ssbad ;
+		ssbad<<theBadValue ;
+
 		if( productCode==1 ){
 			//危险性分级0-4
 			//error = string("危险性区划（分级）数据取值范围0~4,输入数据超出范围个数:") + wStringUtils::int2str(outOfRangePixelCount) ;
-			error = string("输入数据属性值不符合规范（1-4）");
+			error = string("输入数据存在属性值 ") + ssbad.str() + " 超出有效范围[1-4]" ;
 		}
 		else{
 			//风险分级0-5
 			//error = string("风险区划（分级）数据取值范围0~5,输入数据超出范围个数:") + wStringUtils::int2str(outOfRangePixelCount) ;
-			error = string("输入数据属性值不符合规范（1-5）");
+			error = string("输入数据存在属性值 ") + ssbad.str() + " 超出有效范围[1-5]" ;
 		}
 		return false ;
 	}
 	return true;
+}
+
+
+
+string RiskValidateTool::double2str(double val) {
+	if( fabs(val) > 1000 ){
+		stringstream ss ;
+		ss<<val ;
+		return ss.str() ;
+	}else{
+		char buffer[256] ;
+		sprintf(buffer , "%12.7f" , val) ;
+		return string(buffer) ;
+	}
+}
+
+string RiskValidateTool::int2str(int val) 
+{
+	stringstream ss ;
+	ss<<val ;
+	return ss.str() ;
 }

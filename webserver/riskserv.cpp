@@ -27,17 +27,23 @@ int main(int argc , char * argv[]){
 	version += "\nv1.1.0 2022-1-20" ;
 	version += "\nv1.2.2 2022-1-20 add shp extent check, shp class value check, bugfixed for ok01 checking." ;
 	version += "\nv1.3.0 2022-1-25 add error detail for tif 02 03 checking." ;
+	version += "\nv1.4.1 2022-1-26 use one step check use alg 1.5.0 ." ;
 
 	cout<<"A program to server risk product validate. by wf 2022-1-14."<<endl ;
 	cout<<version<<endl ;
-	cout<<"usage:riskserv port /some/dir/logfilename"<<endl ;
-
+	cout<<"usage:riskserv port /some/dir/logfilename debugmode"<<endl ;
+	cout<<"debugmode: 0/1 , default is 0."<<endl ;
 	cout<<"检验算法版本："<<RiskValidateTool::getVersion() <<endl ;
 	cout<<"当前检验算法不对CGCS2000进行判断！！ 2022-1-20"<<endl ;
 	GDALAllRegister();
-	if( argc!=3 ){
-		cout<<"argc not 3."<<endl ;
+	if( argc!=3 && argc !=4 ){
+		cout<<"argc not 3 or 4."<<endl ;
 		return 11 ;
+	}
+
+	bool debugMode = false ;
+	if( argc==4 ){
+		debugMode = atof(argv[3]) ;
 	}
 
 	string port = argv[1];
@@ -63,14 +69,48 @@ int main(int argc , char * argv[]){
 
     // HTTP
 	httplib::Server svr;
-    svr.Get("/validate", [standardCodeRasterFile](const httplib::Request &req, httplib::Response &res) {
+    svr.Get("/validate", [standardCodeRasterFile,debugMode](const httplib::Request &req, httplib::Response &res) {
     	string state = "1" ;// 0-success, 1-do nothing, 9-validate error.
     	string message =  "do nothing" ;
     	if( req.has_param("infile") ){
     		 string inputFilename = req.get_param_value("infile");
     		 spdlog::info("try to check {}" , inputFilename);
 
-    		 //根据文件名结尾判断是tif，tiff还是shp
+    		 string errorall ;
+    		 bool allok = RiskValidateTool::checkInOne(standardCodeRasterFile,inputFilename,errorall,debugMode) ;
+    		 if( allok==true ){
+    		 	state = "0" ;
+    		 	message = "输入数据通过正确性检验" ;
+    		 }else{
+    		 	state = "9" ;
+    		 	message = string("输入数据没有通过检验,错误信息:") + errorall ;
+    		 }
+
+    	}else{
+    		state = "1";
+    		message = "no infile params." ;
+    	}
+
+    	message = wStringUtils::replaceString(message,"\"","'") ;
+  		res.set_content(
+  			string("{\"status:\":")
+  			+state
+  			+",\"message\":\""
+  			+message
+  			+"\"}"
+  			, 
+  			"application/json");
+	});
+	int portval = atof( port.c_str() ) ;
+	svr.listen("0.0.0.0", portval);
+
+
+	return 0 ;
+}
+
+
+/*
+//根据文件名结尾判断是tif，tiff还是shp
     		 bool fileNameOk = false ;
     		 bool isShp = false ;
     		 string fileNameError ;
@@ -189,24 +229,4 @@ int main(int argc , char * argv[]){
 				    }
     		 	}
     		 }
-    	}else{
-    		state = "1";
-    		message = "no infile params." ;
-    	}
-
-    	message = wStringUtils::replaceString(message,"\"","'") ;
-  		res.set_content(
-  			string("{\"status:\":")
-  			+state
-  			+",\"message\":\""
-  			+message
-  			+"\"}"
-  			, 
-  			"application/json");
-	});
-	int portval = atof( port.c_str() ) ;
-	svr.listen("0.0.0.0", portval);
-
-
-	return 0 ;
-}
+*/

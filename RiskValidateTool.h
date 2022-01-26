@@ -22,12 +22,16 @@ class RiskValidateTool
 {
 public:
 	static inline string getVersion() { return version; }
+
+	//2022-1-26 一步全检验
+	static bool checkInOne( string standardfilename, string inputfilename, string& error, bool debug ) ;
+
 	
-	static bool isGeoTiff_CGCS2000(string rasterfilename, string& error);
-	static bool isShape_CGCS2000(string shpfilename, string& error);
+	static bool isGeoTiff_CGCS2000(string rasterfilename, string& error);//unused 2022-1-26
+	static bool isShape_CGCS2000(string shpfilename, string& error);//unused 2022-1-26
 
 	static bool isGeoTiff_GridSizeOK(string rasterfilename, string& error);
-	static bool isShape_GridSizeOK(string shpfilename, string& error);
+	static bool isShape_GridSizeOK(string shpfilename, string& error);//unused 2022-1-26
 
 	static bool isGeoTiff_ExtentOk(string standardfilename, string rasterfilename, string& error);
 	static bool isShp_ExtentOk(string standardfilename,string shpfilename, string& error);
@@ -58,11 +62,16 @@ public:
 	//行政编码长度小于9，自动使用0从后面补足9位，e.g. code=123456 code1=123456000 low=123456000 high=123456999
 	static bool computeXzCode(int code, int& codelow, int& codehigh);
 
-    static string getErrorDetail(){return errorDetail;}//2022-1-20
+    //delete static string getErrorDetail(){return errorDetail;}//2022-1-20
+
+private:
+	static string double2str(double val) ;
+	static string int2str(int val) ;
+
 private:
 	static string version;
 	static double eps;
-    static string errorDetail ;//2022-1-20
+    //delete static string errorDetail ;//2022-1-20
 
 
 };
